@@ -9,12 +9,12 @@ goals_achieved(State, [Goal|RestGoals]) :-
   goals_achieved(State, Goal),
   goals-achieved(State, RestGoals).
 
-goals_achieved(State, on(X, Y)) :-
-  member(on(X, Y), State).
+goals_achieved(State, on(X,Y)) :-
+  member(on(X,Y), State).
 
-goals_achieved(State, on(X, Y/Z)) :-
+goals_achieved(State, on(X,Y/Z)) :-
   goals_achieved(State, Z),
-  member(on(X, Y), State).
+  member(on(X,Y), State).
 
 goals_achieved(State, clear(Y)) :-
   member(clear(Y), State).
@@ -22,6 +22,13 @@ goals_achieved(State, clear(Y)) :-
 goals_achieved(State, clear(Y/Z)) :-
   goals_achieved(State, Z),
   member(clear(Y), State).
+
+goals_achieved(State, diff(X,Y)) :-
+  member(diff(X,Y), State).
+
+goals_achieved(State, diff(X,Y/Z)) :-
+  goals_achieved(State, Z),
+  member(diff(X,Y), State).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -85,6 +92,7 @@ requires(move(X/on(X,From),From,To), [clear(X/on(X,From))], [clear(To)]) :-
 %%%%%%%%%%%%%% inst_action %%%%%%%%%%%%%%%%
 % inst_action(Action, Conditions. State1, InstAction) - ukonkretnia akcje Action w InstAction
 
+% to jest już chyba dobrze
 inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
   nonvar(To),
   To \= _/_,
@@ -92,20 +100,16 @@ inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
   X \= _/_,
   member(on(X,From), State1).
 
+% tutaj jeszcze nie do końca dobrze
 inst_action((move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
   From \= _/_,
   .
 
 
-inst_action(move(X,_,Y), Conditions, State1, move(X,From,Y)) :- !.
-inst_action(move(X,Y,Z), Conditions, State1, InstAction) :- 
-  Y \= _/_.
-inst_action(move(X,Y,Z), Conditions, State1, InstAction) :- !.
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-
+% to perform_action trzeba zmienić, bo pozmieniały się achieves, requires i inst_action
 %%%%%%%%%%%%%% perform_action %%%%%%%%%%%%%%%%
 % perform_action(State1, InstAction, State2) - wykonuje akcje ze na stanie State1 z czego powstaje State2
 perform_action(State, Action, ResultState) :-
@@ -162,34 +166,38 @@ plan(InitState, Goals, Plan, FinalState) :-
   plan(State2, RestGoals, PostPlan, FinalState),
   conc(PrePlan, [InstAction|PostPlan], Plan) .
 
-%plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)],
-%  [on(b3, b2), on(b1, b3)], [], [])
+%% procedury wywoływania: 
+% plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)], [on(b3, b2), on(b1, b3)], [], []).
 
-%plan( [on(b1, p1), clear(p2)], [on(b1, p2)], [], [])
-
-
+% plan( [on(b1, p1), clear(p2)], [on(b1, p2)], [], []).
 
 
 
 
-%plan(InitState, Goals, AchievedGoals, Plan, FinalState) :- % achievedGoal to cele chronione
-%  choose_goal(Goal, Goals, RestGoals, InitState),
-%  achieves(Goal, Action),
-%  requires(Action, CondGoals, Conditions),
-%  plan(InitState, CondGoals, AchievedGoals, PrePlan, State1),
-%  inst_action(Action, Conditions, State1, InstAction),
-%  check_action(Action, AchievedGoals), % sprawdzenie czy action nie znajduje się na liście
-%%  perform_action(State1, InstAction, State2),
- % plan(State2, RestGoals, [Goal | AchievedGoals], PostPlan, FinalState),
-%  conc(PrePlan, [InstAction|PostPlan], Plan) .%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%% nowy plan z listą AchievedGoals i jeszcze trzeba będzie dodać level zagłębienia czy cos takiego.
+
+%  plan(InitState, Goals, AchievedGoals, Plan, FinalState) :- % achievedGoal to cele chronione
+%     choose_goal(Goal, Goals, RestGoals, InitState),
+%     achieves(Goal, Action),
+%     requires(Action, CondGoals, Conditions),
+%     plan(InitState, CondGoals, AchievedGoals, PrePlan, State1),
+%     inst_action(Action, Conditions, State1, InstAction),
+%     check_action(Action, AchievedGoals), % sprawdzenie czy action nie znajduje się na liście
+%     perform_action(State1, InstAction, State2),
+%     plan(State2, RestGoals, [Goal | AchievedGoals], PostPlan, FinalState),
+%     conc(PrePlan, [InstAction|PostPlan], Plan) .%
 
 
-%sugestia dotycząca śledzenia:
-%my_trace(1, ProcedyreName, VariantProcedury, RecursiveLevel, Args) :-
-%  . wejście do precedury ProcedyreName, wariant VariantProcedury, na poziomie RecursiveLevel.
+% sugestia dotycząca śledzenia:
 
-%my_trace(2, ProcedyreName, VariantProcedury, RecursiveLevel, Komunikat) :-
-%  . komunikat = ukończone preplanu
+% my_trace(1, ProcedyreName, VariantProcedury, RecursiveLevel, Args).
+% wejście do precedury ProcedyreName, wariant VariantProcedury, na poziomie RecursiveLevel.
 
-%my_trace(3, InProc, VariantIn, RecursiveLevel, ArgWyjściowe:<FinalState><Plan>) :-
-%  .
+% my_trace(2, ProcedyreName, VariantProcedury, RecursiveLevel, Komunikat).
+% komunikat = ukończone preplanu
+
+% my_trace(3, InProc, VariantIn, RecursiveLevel, ArgWyjściowe:<FinalState><Plan>). ????
