@@ -1,0 +1,195 @@
+is_place(p1).
+is_place(p2).
+
+
+%%%%%%%%%%%% goals_achieved %%%%%%%%%%%%%%%
+goals_achieved(State, []) :- !.
+
+goals_achieved(State, [Goal|RestGoals]) :-
+  goals_achieved(State, Goal),
+  goals-achieved(State, RestGoals).
+
+goals_achieved(State, on(X, Y)) :-
+  member(on(X, Y), State).
+
+goals_achieved(State, on(X, Y/Z)) :-
+  goals_achieved(State, Z),
+  member(on(X, Y), State).
+
+goals_achieved(State, clear(Y)) :-
+  member(clear(Y), State).
+
+goals_achieved(State, clear(Y/Z)) :-
+  goals_achieved(State, Z),
+  member(clear(Y), State).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%% choose_goal %%%%%%%%%%%%%%%
+my_delete(X, [X|R], R).
+my_delete(X, [Y|R], [Y|R1])  :-
+  X \= Y,
+  my_delete(X, R, R1) .
+
+choose_goal(Goal, Goals, RestGoals, InitState)  :-
+  my_delete(Goal, Goals, RestGoals),                  % Goal znajduje się w Goals, a RestGoals to Goals-Goal
+  not(find_goal(Goal, InitState)).                    % Goal nie znajduje się w InitState
+
+% find_goal(Goal, Goals) - sprawdza rekurencyjnie z podwarunkami czy Goal znajduje się na liście Goals
+find_goal(Goal, Goals) :-
+  goal_unpack(Goal, UnpackedGoals),
+  find_goal_final(UnpackedGoals, Goals).
+
+% find_goal_final(AskedGoals, Goals) - sprawdza czy AskedGoals są podzbiorem Goals
+find_goal_final([], _).
+find_goal_final([X|RestGoals], Goals) :-
+  member(X, Goals),
+  find_goal_final(RestGoals, Goals).
+
+goal_unpack(nil, []) :- !.
+goal_unpack(clear(X), [clear(X/nil)]) :-
+  X \= _/_.
+goal_unpack(on(X,Y), [on(X,Y)]) :-
+  Y \= _/_.
+goal_unpack(clear(X/Y), [clear(X/nil)|Result]) :-
+  goal_unpack(Y, Result).
+goal_unpack(on(X,Y/Z), [on(X,Y)|Result]) :-
+  goal_unpack(Z, Result).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%% achieves %%%%%%%%%%%%%%%%%%
+% achieves(Action, Goal) - daje akcje Action która prowadzi do celu Goal
+
+achieves(move(X,From/on(X,From),To), on(X,To)).
+achieves(move(X/on(X,From),From,To), clear(From)).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%% requires %%%%%%%%%%%%%%%%%%
+% requires(Action, CondGoals, Conditions) - CondGoals i Conditions to warunki muszące zachodzić, aby akcja była wykonywalna
+
+requires(move(X,From/on(X,From),To), [clear(X), clear(To)], [on(X,From)]).
+requires(move(X/on(X,From),From,To), [clear(X/on(X,From))], [clear(To)]) :-
+  To \= X/on(X,From).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%% inst_action %%%%%%%%%%%%%%%%
+% inst_action(Action, Conditions. State1, InstAction) - ukonkretnia akcje Action w InstAction
+
+inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
+  nonvar(To),
+  To \= _/_,
+  nonvar(X),
+  X \= _/_,
+  member(on(X,From), State1).
+
+inst_action((move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
+  From \= _/_,
+  .
+
+
+inst_action(move(X,_,Y), Conditions, State1, move(X,From,Y)) :- !.
+inst_action(move(X,Y,Z), Conditions, State1, InstAction) :- 
+  Y \= _/_.
+inst_action(move(X,Y,Z), Conditions, State1, InstAction) :- !.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%% perform_action %%%%%%%%%%%%%%%%
+% perform_action(State1, InstAction, State2) - wykonuje akcje ze na stanie State1 z czego powstaje State2
+perform_action(State, Action, ResultState) :-
+  not(wrong_move(Action)),
+  before_action(Action, StatesBefore),
+  delete_all(State, StatesBefore, State1),
+  after_action(Action, StatesAfter),
+  conc(StatesAfter, State1, ResultState).
+
+% wrong_move(Action) - sprawdza czy ruch jest zły.
+wrong_move(move(X,_,_)) :-
+  is_place(X).
+wrong_move(move(X,_,X)).
+
+% before_action(Action, StatesBefore) - zwraca stany konieczne przed wykonaniem akcji
+before_action(move(X,Y,Z), [on(X,Y), clear(Z/_)]).
+
+% after_action(Action, StatesBefore) - zwraca stany utworzone po wykonaniu akcji
+after_action(move(X,Y,Z), [on(X,Z), clear(Y/nil)]).
+
+% delete_all(States, Deleted, Diff) - usuwa Deleted ze zbioru States i zapisuje wynik w Diff
+delete_all([], _, []).
+delete_all([X | Rest], Deleted, Diff)  :-
+    member(X, Deleted), !,
+    delete_all(Rest, Deleted, Diff).
+delete_all([X | Rest], Deleted, [X | Diff])  :-
+    delete_all(Rest, Deleted, Diff).
+
+% conc(States1, States2, ResultStates) - łączy States1 i States2 w ResultStates
+conc([], Y, Y).
+conc([A|X], Y, [A|Z]) :-
+  conc(X, Y, Z).
+  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+plan(State, Goals, [ ], State) :-
+  goals_achieved(Goals, State) .
+
+plan(InitState, Goals, Plan, FinalState) :-
+  choose_goal(Goal, Goals, RestGoals, InitState),
+  write("wybrany cel: "), write(Goal), nl,
+  achieves(Action, Goal),
+  write("znaleziona akcja: "), write(Action), nl,
+  requires(Action, CondGoals, Conditions),
+  write("warunki: "), write(Conditions), nl,
+  is_place(b1),
+  write("read: "),
+  read(_),
+  plan(InitState, CondGoals, PrePlan, State1),
+  inst_action(Action, Conditions, State1, InstAction),
+  perform_action(State1, InstAction, State2),
+  plan(State2, RestGoals, PostPlan, FinalState),
+  conc(PrePlan, [InstAction|PostPlan], Plan) .
+
+%plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)],
+%  [on(b3, b2), on(b1, b3)], [], [])
+
+%plan( [on(b1, p1), clear(p2)], [on(b1, p2)], [], [])
+
+
+
+
+
+
+%plan(InitState, Goals, AchievedGoals, Plan, FinalState) :- % achievedGoal to cele chronione
+%  choose_goal(Goal, Goals, RestGoals, InitState),
+%  achieves(Goal, Action),
+%  requires(Action, CondGoals, Conditions),
+%  plan(InitState, CondGoals, AchievedGoals, PrePlan, State1),
+%  inst_action(Action, Conditions, State1, InstAction),
+%  check_action(Action, AchievedGoals), % sprawdzenie czy action nie znajduje się na liście
+%%  perform_action(State1, InstAction, State2),
+ % plan(State2, RestGoals, [Goal | AchievedGoals], PostPlan, FinalState),
+%  conc(PrePlan, [InstAction|PostPlan], Plan) .%
+
+
+%sugestia dotycząca śledzenia:
+%my_trace(1, ProcedyreName, VariantProcedury, RecursiveLevel, Args) :-
+%  . wejście do precedury ProcedyreName, wariant VariantProcedury, na poziomie RecursiveLevel.
+
+%my_trace(2, ProcedyreName, VariantProcedury, RecursiveLevel, Komunikat) :-
+%  . komunikat = ukończone preplanu
+
+%my_trace(3, InProc, VariantIn, RecursiveLevel, ArgWyjściowe:<FinalState><Plan>) :-
+%  .
