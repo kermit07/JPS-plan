@@ -1,5 +1,7 @@
 is_place(p1).
 is_place(p2).
+is_place(p3).
+is_place(p4).
 
 
 %%%%%%%%%%%% goals_achieved %%%%%%%%%%%%%%%
@@ -39,14 +41,12 @@ my_delete(X, [Y|R], [Y|R1]) :-
   my_delete(X, R, R1) .
 
 choose_goal(Goal, Goals, RestGoals, InitState) :-
-  write("Choose goal from Goals: "), write(Goals), nl,
   my_delete(Goal, Goals, RestGoals),                  % Goal znajduje się w Goals, a RestGoals to Goals-Goal
   not(find_goal(Goal, InitState)).                    % Goal nie znajduje się w InitState
 
 % find_goal(Goal, Goals) - sprawdza rekurencyjnie z podwarunkami czy Goal znajduje się na liście Goals
 find_goal(Goal, Goals) :-
   goal_unpack(Goal, UnpackedGoals),
-  write("UNpacked goals: "), write(UnpackedGoals), nl,
   find_goal_final(UnpackedGoals, Goals).
 
 % find_goal_final(AskedGoals, Goals) - sprawdza czy AskedGoals są podzbiorem Goals
@@ -93,10 +93,7 @@ requires(move(X/on(X,From),From,To), [clear(X/on(X,From))], [clear(To)]) :-
 %%%%%%%%%%%%%% inst_action %%%%%%%%%%%%%%%%
 % inst_action(Action, Conditions. State1, InstAction) - ukonkretnia akcje Action w InstAction
 
-
-
 inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
-  write("inst_action_1"), nl,
   var(X),
   To \= _/_,
   var(To),
@@ -104,24 +101,20 @@ inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
   member(on(X,From), State1).
 
 inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
-  write("inst_action_2"), nl,
   nonvar(X),
   To \= _/_,
   X \= _/_,
   member(on(X,From), State1),
   member(clear(To), State1).
 
-
-
-% tutaj jeszcze nie do końca dobrze
-%inst_action((move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
-%  From \= _/_.
-
+inst_action(move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
+  To \= _/_,
+  member(clear(To),State1),
+  member(on(X,From),State1).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-% to perform_action trzeba zmienić, bo pozmieniały się achieves, requires i inst_action
 %%%%%%%%%%%%%% perform_action %%%%%%%%%%%%%%%%
 % perform_action(State1, InstAction, State2) - wykonuje akcje ze na stanie State1 z czego powstaje State2
 perform_action(State, Action, ResultState) :-
@@ -157,71 +150,69 @@ conc([A|X], Y, [A|Z]) :-
   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%%%%%%%%%% preserves %%%%%%%%%%%%%%%%
+
+preserves(move(X,Y,Z), AchievedGoals) :-
+  not(member(on(X,Y), AchievedGoals)),
+  not(member(clear(Z), AchievedGoals)).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-plan(State, Goals, [], State) :-
-  tab(5), write("KONIEC"), nl,
-  goals_achieved(State, Goals).
+plan_start(InitState, Goals, Plan, FinalState) :-
+  range(0, 15, Number),
+  write("____________________________________________________________"), nl,
+  write("|----------------Nowa liczba krokow:----------------- "), write(Number), write(" ---|"), nl,
+  write("|__________________________________________________________|"), nl,
+  plan(InitState, Goals, Plan, FinalState, [], 0, Number), !.
 
-plan(InitState, Goals, Plan, FinalState) :-
-  write("---------------------------------------"), nl,
-  write("InitState: "), write(InitState), nl,
+range(Current, _, Current).
+
+range(Current, Last, Next) :-
+  Current < Last,
+  Current1 is Current + 1,
+  range(Current1, Last, Next).
+
+plan(State, Goals, [], State, _, Tabulation, _) :-
+  goals_achieved(State, Goals),
+  tab(Tabulation), write("-------KONIEC--------"), nl.
+
+plan(InitState, Goals, Plan, FinalState, AchievedGoals, Tabulation, StepsLeft) :-
+  T is Tabulation + 2,
+  tab(T), write("Czy zostaly jeszcze jakies kroki?"), nl,
+  StepsLeft > 0,
+  tab(T), write("Tak, "), write(StepsLeft), nl,
+  range(0, StepsLeft, ActualSteps),
+  tab(T), write("--------------ARGUMENTY PLANU----------------"), nl,
+  tab(T), write("InitState:           "), write(InitState), nl,
+  tab(T), write("Goals:               "), write(Goals), nl,
+  tab(T), write("Plan:                "), write(Plan), nl,
+  tab(T), write("---------------------------------------------"), nl,
+  tab(T), write("Szukanie celow w:    "), write(Goals), nl,
   choose_goal(Goal, Goals, RestGoals, InitState),
-  write("wybrany cel: "), write(Goal), nl,
+  tab(T), write("wybrany cel:         "), write(Goal), nl,
   achieves(Action, Goal),
-  write("znaleziona akcja: "), write(Action), nl,
+  tab(T), write("znaleziona akcja:    "), write(Action), nl,
   requires(Action, CondGoals, Conditions),
-  write("Conditions: "), write(Conditions), nl,
-  write("CondGoals: "), write(CondGoals), nl,
-  plan(InitState, CondGoals, PrePlan, State1),
-  write("preplan: "), write(PrePlan), nl,
-  write("state1: "), write(State1), nl,
+  tab(T), write("warunki dla akcji:   "), write(Conditions), nl,
+  tab(T), write("CondGoals:           "), write(CondGoals), nl,
+  preserves(Action, AchievedGoals),
+
+  plan(InitState, CondGoals, PrePlan, State1, AchievedGoals, T, ActualSteps),
+  tab(T), write("preplan:             "), write(PrePlan), nl,
+  tab(T), write("state1:              "), write(State1), nl,
   inst_action(Action, Conditions, State1, InstAction),
-  write("ukonkretniona akcja: "), write(InstAction), nl,
+  tab(T), write("ukonkretniona akcja: "), write(InstAction), nl,
   perform_action(State1, InstAction, State2),
-  write("state2: "), write(State2), nl,
-  write("RestGoals: "), write(RestGoals), nl,
-  plan(State2, RestGoals, PostPlan, FinalState),
+
+  tab(T), write("state2:              "), write(State2), nl,
+  tab(T), write("RestGoals:           "), write(RestGoals), nl,
+  NewStepsLeft is StepsLeft - ActualSteps - 1,
+  plan(State2, RestGoals, PostPlan, FinalState, [Goal|AchievedGoals], T, NewStepsLeft),
   conc(PrePlan, [InstAction|PostPlan], Plan).
 
 
-
-
-
-%% procedury wywoływania: 
-% plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)], [on(b3, b2), on(b1, b3)], Plan, FinalState).
-
-% plan( [on(b1, p1), clear(p2)], [on(b1, p2)], Plan, FinalState).
-
-% plan([on(b3,b2), on(b2,b1), on(b1,p1), on(b4,p3), clear(b3), clear(b4), clear(p2), clear(p4)], [on(b2,b3), on(b4,b1)], Plan, FinalState).
-
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%% nowy plan z listą AchievedGoals i jeszcze trzeba będzie dodać level zagłębienia czy cos takiego.
-
-%  plan(InitState, Goals, AchievedGoals, Plan, FinalState) :- % achievedGoal to cele chronione
-%     choose_goal(Goal, Goals, RestGoals, InitState),
-%     achieves(Goal, Action),
-%     requires(Action, CondGoals, Conditions),
-%     plan(InitState, CondGoals, AchievedGoals, PrePlan, State1),
-%     inst_action(Action, Conditions, State1, InstAction),
-%     check_action(Action, AchievedGoals), % sprawdzenie czy action nie znajduje się na liście
-%     perform_action(State1, InstAction, State2),
-%     plan(State2, RestGoals, [Goal | AchievedGoals], PostPlan, FinalState),
-%     conc(PrePlan, [InstAction|PostPlan], Plan) .%
-
-
-% sugestia dotycząca śledzenia:
-
-% my_trace(1, ProcedyreName, VariantProcedury, RecursiveLevel, Args).
-% wejście do precedury ProcedyreName, wariant VariantProcedury, na poziomie RecursiveLevel.
-
-% my_trace(2, ProcedyreName, VariantProcedury, RecursiveLevel, Komunikat).
-% komunikat = ukończone preplanu
-
-% my_trace(3, InProc, VariantIn, RecursiveLevel, ArgWyjściowe:<FinalState><Plan>). ????
+% przykłady:
+% plan_start( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)], [on(b3, b2), on(b1, b3)], Plan, FinalState).
+% plan_start([on(b3,b2), on(b2,b1), on(b1,p1), on(b4,p3), clear(b3), clear(b4), clear(p2), clear(p4)], [on(b2,b3), on(b4,b1), on(b3,p4)], Plan, FinalState).
+% plan_start([on(b1,p1), on(b2,b1), on(b3,b2), on(b4,b3), on(b5,p3), clear(b4), clear(p2), clear(b5), clear(p4)], [on(b2,p3), on(b4,p2), on(b5,b4), on(b3,b5), on(b1,b3)], Plan, FinalState).
