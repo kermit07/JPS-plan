@@ -4,30 +4,30 @@ is_place(p2).
 
 %%%%%%%%%%%% goals_achieved %%%%%%%%%%%%%%%
 goals_achieved(State, []) :- !.
-
+ 
 goals_achieved(State, [Goal|RestGoals]) :-
-  goals_achieved(State, Goal),
-  goals-achieved(State, RestGoals).
-
-goals_achieved(State, on(X,Y)) :-
+  goal_achieved(State, Goal),
+  goals_achieved(State, RestGoals).
+ 
+goal_achieved(State, on(X,Y)) :-
   member(on(X,Y), State).
-
-goals_achieved(State, on(X,Y/Z)) :-
-  goals_achieved(State, Z),
+ 
+goal_achieved(State, on(X,Y/Z)) :-
+  goal_achieved(State, Z),
   member(on(X,Y), State).
-
-goals_achieved(State, clear(Y)) :-
+ 
+goal_achieved(State, clear(Y)) :-
   member(clear(Y), State).
-
-goals_achieved(State, clear(Y/Z)) :-
-  goals_achieved(State, Z),
+ 
+goal_achieved(State, clear(Y/Z)) :-
+  goal_achieved(State, Z),
   member(clear(Y), State).
-
-goals_achieved(State, diff(X,Y)) :-
+ 
+goal_achieved(State, diff(X,Y)) :-
   member(diff(X,Y), State).
-
-goals_achieved(State, diff(X,Y/Z)) :-
-  goals_achieved(State, Z),
+ 
+goal_achieved(State, diff(X,Y/Z)) :-
+  goal_achieved(State, Z),
   member(diff(X,Y), State).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -35,17 +35,18 @@ goals_achieved(State, diff(X,Y/Z)) :-
 
 %%%%%%%%%%%%%%% choose_goal %%%%%%%%%%%%%%%
 my_delete(X, [X|R], R).
-my_delete(X, [Y|R], [Y|R1])  :-
-  X \= Y,
+my_delete(X, [Y|R], [Y|R1]) :-
   my_delete(X, R, R1) .
 
-choose_goal(Goal, Goals, RestGoals, InitState)  :-
+choose_goal(Goal, Goals, RestGoals, InitState) :-
+  write("Choose goal from Goals: "), write(Goals), nl,
   my_delete(Goal, Goals, RestGoals),                  % Goal znajduje się w Goals, a RestGoals to Goals-Goal
   not(find_goal(Goal, InitState)).                    % Goal nie znajduje się w InitState
 
 % find_goal(Goal, Goals) - sprawdza rekurencyjnie z podwarunkami czy Goal znajduje się na liście Goals
 find_goal(Goal, Goals) :-
   goal_unpack(Goal, UnpackedGoals),
+  write("UNpacked goals: "), write(UnpackedGoals), nl,
   find_goal_final(UnpackedGoals, Goals).
 
 % find_goal_final(AskedGoals, Goals) - sprawdza czy AskedGoals są podzbiorem Goals
@@ -54,12 +55,12 @@ find_goal_final([X|RestGoals], Goals) :-
   member(X, Goals),
   find_goal_final(RestGoals, Goals).
 
-goal_unpack(nil, []) :- !.
-goal_unpack(clear(X), [clear(X/nil)]) :-
+goal_unpack([], []) :- !.
+goal_unpack(clear(X), [clear(X)]) :-
   X \= _/_.
 goal_unpack(on(X,Y), [on(X,Y)]) :-
   Y \= _/_.
-goal_unpack(clear(X/Y), [clear(X/nil)|Result]) :-
+goal_unpack(clear(X/Y), [clear(X)|Result]) :-
   goal_unpack(Y, Result).
 goal_unpack(on(X,Y/Z), [on(X,Y)|Result]) :-
   goal_unpack(Z, Result).
@@ -92,18 +93,29 @@ requires(move(X/on(X,From),From,To), [clear(X/on(X,From))], [clear(To)]) :-
 %%%%%%%%%%%%%% inst_action %%%%%%%%%%%%%%%%
 % inst_action(Action, Conditions. State1, InstAction) - ukonkretnia akcje Action w InstAction
 
-% to jest już chyba dobrze
+
+
 inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
-  nonvar(To),
+  write("inst_action_1"), nl,
+  var(X),
   To \= _/_,
-  nonvar(X),
+  var(To),
   X \= _/_,
   member(on(X,From), State1).
 
+inst_action(move(X,From/on(X,From),To), Conditions, State1, move(X,From,To)) :-
+  write("inst_action_2"), nl,
+  nonvar(X),
+  To \= _/_,
+  X \= _/_,
+  member(on(X,From), State1),
+  member(clear(To), State1).
+
+
+
 % tutaj jeszcze nie do końca dobrze
-inst_action((move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
-  From \= _/_,
-  .
+%inst_action((move(X/on(X,From),From,To), Conditions, State1, move(X,From,To)) :-
+%  From \= _/_.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,10 +137,10 @@ wrong_move(move(X,_,_)) :-
 wrong_move(move(X,_,X)).
 
 % before_action(Action, StatesBefore) - zwraca stany konieczne przed wykonaniem akcji
-before_action(move(X,Y,Z), [on(X,Y), clear(Z/_)]).
+before_action(move(X,Y,Z), [on(X,Y), clear(Z)]).
 
 % after_action(Action, StatesBefore) - zwraca stany utworzone po wykonaniu akcji
-after_action(move(X,Y,Z), [on(X,Z), clear(Y/nil)]).
+after_action(move(X,Y,Z), [on(X,Z), clear(Y)]).
 
 % delete_all(States, Deleted, Diff) - usuwa Deleted ze zbioru States i zapisuje wynik w Diff
 delete_all([], _, []).
@@ -147,29 +159,41 @@ conc([A|X], Y, [A|Z]) :-
 
 
 
-plan(State, Goals, [ ], State) :-
-  goals_achieved(Goals, State) .
+plan(State, Goals, [], State) :-
+  tab(5), write("KONIEC"), nl,
+  goals_achieved(State, Goals).
 
 plan(InitState, Goals, Plan, FinalState) :-
+  write("---------------------------------------"), nl,
+  write("InitState: "), write(InitState), nl,
   choose_goal(Goal, Goals, RestGoals, InitState),
   write("wybrany cel: "), write(Goal), nl,
   achieves(Action, Goal),
   write("znaleziona akcja: "), write(Action), nl,
   requires(Action, CondGoals, Conditions),
-  write("warunki: "), write(Conditions), nl,
-  is_place(b1),
-  write("read: "),
-  read(_),
+  write("Conditions: "), write(Conditions), nl,
+  write("CondGoals: "), write(CondGoals), nl,
   plan(InitState, CondGoals, PrePlan, State1),
+  write("preplan: "), write(PrePlan), nl,
+  write("state1: "), write(State1), nl,
   inst_action(Action, Conditions, State1, InstAction),
+  write("ukonkretniona akcja: "), write(InstAction), nl,
   perform_action(State1, InstAction, State2),
+  write("state2: "), write(State2), nl,
+  write("RestGoals: "), write(RestGoals), nl,
   plan(State2, RestGoals, PostPlan, FinalState),
-  conc(PrePlan, [InstAction|PostPlan], Plan) .
+  conc(PrePlan, [InstAction|PostPlan], Plan).
+
+
+
+
 
 %% procedury wywoływania: 
-% plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)], [on(b3, b2), on(b1, b3)], [], []).
+% plan( [on(b4, p1), on(b1, b4), on(b3, b1), on(b2, p3), clear(b3), clear(b2), clear(p2), clear(p4)], [on(b3, b2), on(b1, b3)], Plan, FinalState).
 
-% plan( [on(b1, p1), clear(p2)], [on(b1, p2)], [], []).
+% plan( [on(b1, p1), clear(p2)], [on(b1, p2)], Plan, FinalState).
+
+% plan([on(b3,b2), on(b2,b1), on(b1,p1), on(b4,p3), clear(b3), clear(b4), clear(p2), clear(p4)], [on(b2,b3), on(b4,b1)], Plan, FinalState).
 
 
 
